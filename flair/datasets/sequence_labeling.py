@@ -1,5 +1,6 @@
 import logging
 import re
+import os
 from pathlib import Path
 from typing import Union, Dict, List
 
@@ -20,7 +21,7 @@ class ColumnCorpus(Corpus):
             test_file=None,
             dev_file=None,
             tag_to_bioes=None,
-            column_delimiter: str = "\s+",
+            column_delimiter: str = r"\s+",
             comment_symbol: str = None,
             encoding: str = "utf-8",
             document_separator_token: str = None,
@@ -93,16 +94,15 @@ class ColumnCorpus(Corpus):
 
 
 class ColumnDataset(FlairDataset):
-
     # special key for space after
     SPACE_AFTER_KEY = "space-after"
 
     def __init__(
             self,
-            path_to_column_file: Path,
+            path_to_column_file: Union[str, Path],
             column_name_map: Dict[int, str],
             tag_to_bioes: str = None,
-            column_delimiter: str = "\s+",
+            column_delimiter: str = r"\s+",
             comment_symbol: str = None,
             in_memory: bool = True,
             document_separator_token: str = None,
@@ -123,6 +123,8 @@ class ColumnDataset(FlairDataset):
         that indicates that a new document begins
         :param skip_first_line: set to True if your dataset has a header line
         """
+        if type(path_to_column_file) is str:
+            path_to_column_file = Path(path_to_column_file)
         assert path_to_column_file.exists()
         self.path_to_column_file = path_to_column_file
         self.tag_to_bioes = tag_to_bioes
@@ -211,7 +213,7 @@ class ColumnDataset(FlairDataset):
                         self.column_name_map[column], fields[column]
                     )
                 if self.column_name_map[column] == self.SPACE_AFTER_KEY and fields[column] == '-':
-                        token.whitespace_after = False
+                    token.whitespace_after = False
         return token
 
     def __line_completes_sentence(self, line: str) -> bool:
@@ -264,6 +266,38 @@ class ColumnDataset(FlairDataset):
         return sentence
 
 
+class BIOFID(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "ner",
+            in_memory: bool = True,
+    ):
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "lemma", 2: "pos", 3: "ner"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        # download data if necessary
+        biofid_path = "https://raw.githubusercontent.com/texttechnologylab/BIOfid/master/BIOfid-Dataset-NER/"
+        cached_path(f"{biofid_path}train.conll", Path("datasets") / dataset_name)
+        cached_path(f"{biofid_path}dev.conll", Path("datasets") / dataset_name)
+        cached_path(f"{biofid_path}test.conll", Path("datasets") / dataset_name)
+
+        super(BIOFID, self).__init__(
+            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
+        )
+
+
 class CONLL_03(ColumnCorpus):
     def __init__(
             self,
@@ -274,9 +308,10 @@ class CONLL_03(ColumnCorpus):
     ):
         """
         Initialize the CoNLL-03 corpus. This is only possible if you've manually downloaded it to your machine.
-        Obtain the corpus from https://www.clips.uantwerpen.be/conll2003/ner/ and put it into some folder. Then point
-        the base_path parameter in the constructor to this folder
-        :param base_path: Path to the CoNLL-03 corpus on your machine
+        Obtain the corpus from https://www.clips.uantwerpen.be/conll2003/ner/ and put the eng.testa, .testb, .train
+        files in a folder called 'conll_03'. Then set the base_path parameter in the constructor to the path to the
+        parent directory where the conll_03 folder resides.
+        :param base_path: Path to the CoNLL-03 corpus (i.e. 'conll_03' folder) on your machine
         :param tag_to_bioes: NER by default, need not be changed, but you could also select 'pos' or 'np' to predict
         POS tags or chunks respectively
         :param in_memory: If True, keeps dataset in memory giving speedups in training.
@@ -299,7 +334,7 @@ class CONLL_03(ColumnCorpus):
         # check if data there
         if not data_folder.exists():
             log.warning("-" * 100)
-            log.warning(f'ACHTUNG: CoNLL-03 dataset not found at "{data_folder}".')
+            log.warning(f'WARNING: CoNLL-03 dataset not found at "{data_folder}".')
             log.warning(
                 'Instructions for obtaining the data can be found here: https://www.clips.uantwerpen.be/conll2003/ner/"'
             )
@@ -324,9 +359,10 @@ class CONLL_03_GERMAN(ColumnCorpus):
     ):
         """
         Initialize the CoNLL-03 corpus for German. This is only possible if you've manually downloaded it to your machine.
-        Obtain the corpus from https://www.clips.uantwerpen.be/conll2003/ner/ and put it into some folder. Then point
-        the base_path parameter in the constructor to this folder
-        :param base_path: Path to the CoNLL-03 corpus on your machine
+        Obtain the corpus from https://www.clips.uantwerpen.be/conll2003/ner/ and put the respective files in a folder called
+        'conll_03_german'. Then set the base_path parameter in the constructor to the path to the parent directory where
+        the conll_03_german folder resides.
+        :param base_path: Path to the CoNLL-03 corpus (i.e. 'conll_03_german' folder) on your machine
         :param tag_to_bioes: NER by default, need not be changed, but you could also select 'lemma', 'pos' or 'np' to predict
         word lemmas, POS tags or chunks respectively
         :param in_memory: If True, keeps dataset in memory giving speedups in training.
@@ -349,7 +385,7 @@ class CONLL_03_GERMAN(ColumnCorpus):
         # check if data there
         if not data_folder.exists():
             log.warning("-" * 100)
-            log.warning(f'ACHTUNG: CoNLL-03 dataset not found at "{data_folder}".')
+            log.warning(f'WARNING: CoNLL-03 dataset not found at "{data_folder}".')
             log.warning(
                 'Instructions for obtaining the data can be found here: https://www.clips.uantwerpen.be/conll2003/ner/"'
             )
@@ -410,6 +446,50 @@ class CONLL_03_DUTCH(ColumnCorpus):
             in_memory=in_memory,
             document_separator_token=None if not document_as_sequence else "-DOCSTART-",
         )
+
+
+def add_IOB2_tags(data_file: Union[str, Path], encoding: str = "utf8"):
+    """
+Function that adds IOB2 tags if only chunk names are provided (e.g. words are tagged PER instead
+of B-PER or I-PER). Replaces '0' with 'O' as the no-chunk tag since ColumnCorpus expects
+the letter 'O'. Additionaly it removes lines with no tags in the data file and can also
+be used if the data is only partialy IOB tagged.
+Parameters
+----------
+data_file : Union[str, Path]
+    Path to the data file.
+encoding : str, optional
+    Encoding used in open function. The default is "utf8".
+
+"""
+    with open(file=data_file, mode='r', encoding=encoding) as f:
+        lines = f.readlines()
+    with open(file=data_file, mode='w', encoding=encoding) as f:
+        pred = 'O'  # remembers tag of predecessing line
+        for line in lines:
+            line_list = line.split()
+            if len(line_list) == 2:  # word with tag
+                word = line_list[0]
+                tag = line_list[1]
+                if tag in ['0', 'O']:  # no chunk
+                    f.write(word + ' O\n')
+                    pred = 'O'
+                elif '-' not in tag:  # no IOB tags
+                    if pred == 'O':  # found a new chunk
+                        f.write(word + ' B-' + tag + '\n')
+                        pred = tag
+                    else:  # found further part of chunk or new chunk directly after old chunk
+                        if pred == tag:
+                            f.write(word + ' I-' + tag + '\n')
+                        else:
+                            f.write(word + ' B-' + tag + '\n')
+                            pred = tag
+                else:  # line already has IOB tag (tag contains '-')
+                    f.write(line)
+                    pred = tag.split('-')[1]
+            elif len(line_list) == 0:  # empty line
+                f.write('\n')
+                pred = 'O'
 
 
 class CONLL_03_SPANISH(ColumnCorpus):
@@ -607,9 +687,8 @@ class GERMEVAL_14(ColumnCorpus):
 
         # check if data there
         if not data_folder.exists():
-
             log.warning("-" * 100)
-            log.warning(f'ACHTUNG: GermEval-14 dataset not found at "{data_folder}".')
+            log.warning(f'WARNING: GermEval-14 dataset not found at "{data_folder}".')
             log.warning(
                 'Instructions for obtaining the data can be found here: https://sites.google.com/site/germeval2014ner/home/"'
             )
@@ -620,6 +699,84 @@ class GERMEVAL_14(ColumnCorpus):
             tag_to_bioes=tag_to_bioes,
             comment_symbol="#",
             in_memory=in_memory,
+        )
+
+
+class INSPEC(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "keyword",
+            in_memory: bool = True,
+    ):
+
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "keyword"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        inspec_path = "https://raw.githubusercontent.com/midas-research/keyphrase-extraction-as-sequence-labeling-data/master/Inspec"
+        cached_path(f"{inspec_path}/train.txt", Path("datasets") / dataset_name)
+        cached_path(f"{inspec_path}/test.txt", Path("datasets") / dataset_name)
+        if not "dev.txt" in os.listdir(data_folder):
+            cached_path(f"{inspec_path}/valid.txt", Path("datasets") / dataset_name)
+            # rename according to train - test - dev - convention
+            os.rename(data_folder / "valid.txt", data_folder / "dev.txt")
+
+        super(INSPEC, self).__init__(
+            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
+        )
+
+
+class LER_GERMAN(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "ner",
+            in_memory: bool = False,
+    ):
+        """
+        Initialize the LER_GERMAN (Legal Entity Recognition) corpus. The first time you call this constructor it will automatically
+        download the dataset.
+        :param base_path: Default is None, meaning that corpus gets auto-downloaded and loaded. You can override this
+        to point to a different folder but typically this should not be necessary.
+        :param in_memory: If True, keeps dataset in memory giving speedups in training. Not recommended due to heavy RAM usage.
+        :param document_as_sequence: If True, all sentences of a document are read into a single Sentence object
+        """
+
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "ner"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        # download data if necessary
+        ler_path = "https://raw.githubusercontent.com/elenanereiss/Legal-Entity-Recognition/master/data/"
+        cached_path(f"{ler_path}ler.conll", Path("datasets") / dataset_name)
+
+        super(LER_GERMAN, self).__init__(
+            data_folder,
+            columns,
+            tag_to_bioes=tag_to_bioes,
+            in_memory=in_memory,
+            train_file='ler.conll'
         )
 
 
@@ -667,6 +824,159 @@ class NER_BASQUE(ColumnCorpus):
                     shutil.move(f"{data_path}/{corpus_file}", data_path)
 
         super(NER_BASQUE, self).__init__(
+            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
+        )
+
+
+class NER_FINNISH(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "ner",
+            in_memory: bool = True,
+    ):
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "ner"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        # download data if necessary
+        ner_finnish_path = "https://raw.githubusercontent.com/mpsilfve/finer-data/master/data/digitoday."
+        cached_path(f"{ner_finnish_path}2014.train.csv", Path("datasets") / dataset_name)
+        cached_path(f"{ner_finnish_path}2014.dev.csv", Path("datasets") / dataset_name)
+        cached_path(f"{ner_finnish_path}2015.test.csv", Path("datasets") / dataset_name)
+
+        _remove_lines_without_annotations(data_file=Path(data_folder / "digitoday.2015.test.csv"))
+
+        super(NER_FINNISH, self).__init__(
+            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory, skip_first_line=True
+        )
+
+
+def _remove_lines_without_annotations(data_file: Union[str, Path] = None):
+    with open(data_file, 'r') as f:
+        lines = f.readlines()
+    with open(data_file, 'w') as f:
+        for line in lines:
+            if len(line.split()) != 1:
+                f.write(line)
+
+
+class NER_SWEDISH(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "ner",
+            in_memory: bool = True,
+    ):
+        """
+        Initialize the NER_SWEDISH corpus for Swedish. The first time you call this constructor it will automatically
+        download the dataset.
+        :param base_path: Default is None, meaning that corpus gets auto-downloaded and loaded. You can override this
+        to point to a different folder but typically this should not be necessary.
+        :param in_memory: If True, keeps dataset in memory giving speedups in training.
+        :param document_as_sequence: If True, all sentences of a document are read into a single Sentence object
+        """
+
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "ner"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        # download data if necessary
+        ner_spraakbanken_path = "https://raw.githubusercontent.com/klintan/swedish-ner-corpus/master/"
+        cached_path(f"{ner_spraakbanken_path}test_corpus.txt", Path("datasets") / dataset_name)
+        cached_path(f"{ner_spraakbanken_path}train_corpus.txt", Path("datasets") / dataset_name)
+
+        # data is not in IOB2 format. Thus we transform it to IOB2
+        add_IOB2_tags(data_file=Path(data_folder / "test_corpus.txt"))
+        add_IOB2_tags(data_file=Path(data_folder / "train_corpus.txt"))
+
+        super(NER_SWEDISH, self).__init__(
+            data_folder,
+            columns,
+            tag_to_bioes=tag_to_bioes,
+            in_memory=in_memory,
+        )
+
+
+class SEMEVAL2017(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "keyword",
+            in_memory: bool = True,
+    ):
+
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "keyword"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        semeval2017_path = "https://raw.githubusercontent.com/midas-research/keyphrase-extraction-as-sequence-labeling-data/master/SemEval-2017"
+        cached_path(f"{semeval2017_path}/train.txt", Path("datasets") / dataset_name)
+        cached_path(f"{semeval2017_path}/test.txt", Path("datasets") / dataset_name)
+        cached_path(f"{semeval2017_path}/dev.txt", Path("datasets") / dataset_name)
+
+        super(SEMEVAL2017, self).__init__(
+            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
+        )
+
+
+class SEMEVAL2010(ColumnCorpus):
+    def __init__(
+            self,
+            base_path: Union[str, Path] = None,
+            tag_to_bioes: str = "keyword",
+            in_memory: bool = True,
+    ):
+
+        if type(base_path) == str:
+            base_path: Path = Path(base_path)
+
+        # column format
+        columns = {0: "text", 1: "keyword"}
+
+        # this dataset name
+        dataset_name = self.__class__.__name__.lower()
+
+        # default dataset folder is the cache root
+        if not base_path:
+            base_path = Path(flair.cache_root) / "datasets"
+        data_folder = base_path / dataset_name
+
+        semeval2010_path = "https://raw.githubusercontent.com/midas-research/keyphrase-extraction-as-sequence-labeling-data/master/processed_semeval-2010"
+        cached_path(f"{semeval2010_path}/train.txt", Path("datasets") / dataset_name)
+        cached_path(f"{semeval2010_path}/test.txt", Path("datasets") / dataset_name)
+
+        super(SEMEVAL2010, self).__init__(
             data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
         )
 
@@ -965,19 +1275,18 @@ class WNUT_17(ColumnCorpus):
             data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
         )
 
+class BIOSCOPE(ColumnCorpus):
 
-class BIOFID(ColumnCorpus):
     def __init__(
             self,
             base_path: Union[str, Path] = None,
-            tag_to_bioes: str = "ner",
             in_memory: bool = True,
     ):
         if type(base_path) == str:
             base_path: Path = Path(base_path)
 
         # column format
-        columns = {0: "text", 1: "lemma", 2: "pos", 3: "ner"}
+        columns = {0: "text", 1: "tag"}
 
         # this dataset name
         dataset_name = self.__class__.__name__.lower()
@@ -988,13 +1297,11 @@ class BIOFID(ColumnCorpus):
         data_folder = base_path / dataset_name
 
         # download data if necessary
-        biofid_path = "https://raw.githubusercontent.com/texttechnologylab/BIOfid/master/BIOfid-Dataset-NER/"
-        cached_path(f"{biofid_path}train.conll", Path("datasets") / dataset_name)
-        cached_path(f"{biofid_path}dev.conll", Path("datasets") / dataset_name)
-        cached_path(f"{biofid_path}test.conll", Path("datasets") / dataset_name)
+        bioscope_path = "https://raw.githubusercontent.com/whoisjones/BioScopeSequenceLabelingData/master/sequence_labeled/"
+        cached_path(f"{bioscope_path}output.txt", Path("datasets") / dataset_name)
 
-        super(BIOFID, self).__init__(
-            data_folder, columns, tag_to_bioes=tag_to_bioes, in_memory=in_memory
+        super(BIOSCOPE, self).__init__(
+            data_folder, columns, in_memory=in_memory, train_file="output.txt"
         )
 
 
@@ -1032,6 +1339,7 @@ def _download_wikiner(language_code: str, dataset_name: str):
                 / dataset_name
                 / f"aij-wikiner-{lc}-wp3.train",
                 "w",
+                encoding="utf-8"
         ) as out:
             for line in f:
                 line = line.decode("utf-8")

@@ -25,7 +25,7 @@ log = logging.getLogger("flair")
 class TextDataset(Dataset):
     def __init__(
         self,
-        path: Path,
+        path: Union[str, Path],
         dictionary: Dictionary,
         expand_vocab: bool = False,
         forward: bool = True,
@@ -34,7 +34,8 @@ class TextDataset(Dataset):
         document_delimiter: str = '\n',
         shuffle: bool = True,
     ):
-
+        if type(path) is str:
+            path = Path(path)
         assert path.exists()
 
         self.files = None
@@ -66,7 +67,7 @@ class TextDataset(Dataset):
 
     def charsplit(
         self,
-        path: Path,
+        path: Union[str, Path],
         expand_vocab=False,
         forward=True,
         split_on_char=True,
@@ -74,6 +75,8 @@ class TextDataset(Dataset):
     ) -> torch.tensor:
 
         """Tokenizes a text file on character basis."""
+        if type(path) is str:
+            path = Path(path)
         assert path.exists()
 
         lines = [doc + self.document_delimiter
@@ -140,14 +143,16 @@ class TextDataset(Dataset):
     @staticmethod
     def random_casechange(line: str) -> str:
         no = random.randint(0, 99)
-        if no is 0:
+        if no == 0:
             line = line.lower()
-        if no is 1:
+        if no == 1:
             line = line.upper()
         return line
 
-    def tokenize(self, path: Path):
+    def tokenize(self, path: Union[str, Path]):
         """Tokenizes a text file."""
+        if type(path) is str:
+            path = Path(path)
         assert path.exists()
         # Add words to the dictionary
         with open(path, "r") as f:
@@ -552,8 +557,11 @@ class LanguageModelTrainer:
 
     @staticmethod
     def load_from_checkpoint(
-        checkpoint_file: Path, corpus: TextCorpus, optimizer: Optimizer = SGD
+        checkpoint_file: Union[str, Path], corpus: TextCorpus, optimizer: Optimizer = SGD
     ):
+        if type(checkpoint_file) is str:
+            checkpoint_file = Path(checkpoint_file)
+
         checkpoint = LanguageModel.load_checkpoint(checkpoint_file)
         return LanguageModelTrainer(
             checkpoint["model"],
